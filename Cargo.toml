@@ -1,0 +1,17 @@
+[package]
+name = "cosiest_noisiest"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+cfg-if = "1.0.0"
+num-integer = { version = "0.1.46", default-features = false }
+rand = { version = "0.8.5", default-features = false }
+rand_chacha = { version = "0.3.1", default-features = false }
+splines = "4.3.1"
+
+[features]
+f32 = []

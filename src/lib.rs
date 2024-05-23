@@ -20,8 +20,6 @@ use rand::distributions::{Distribution, Standard};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 use splines::{Interpolate, Interpolation, Key, Spline};
-use std::arch::x86_64;
-use std::array;
 use std::mem::size_of;
 use std::ops::{AddAssign, Mul};
 

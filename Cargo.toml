@@ -8,10 +8,17 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 cfg-if = "1.0.0"
-num-integer = { version = "0.1.46", default-features = false }
-rand = { version = "0.8.5", default-features = false }
-rand_chacha = { version = "0.3.1", default-features = false }
-splines = "4.3.1"
+num-integer = { version = "0.1", default-features = false }
+rand = { version = "0.8", default-features = false}
+rand_chacha = { version = "0.3", default-features = false }
+splines = "4.3"
 
 [features]
 f32 = []
+
+[dev-dependencies]
+divan = "0.1.14"
+
+[[bench]]
+name = "example"
+harness = false

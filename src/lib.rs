@@ -7,7 +7,14 @@
 //! use cosiest_noisiest::NoiseGenerator;
 //!
 //! let mut noise_generator = NoiseGenerator::from_u64_seed(2, 1. / 32., 128., 3);
-//! let noise:f64 = noise_generator.sample(123456789);
+//! let noise:f64 = noise_generator.sample(1024);
+//! ```
+//! ```
+//! use cosiest_noisiest::NoiseGenerator;
+//!
+//! let mut noise_generator = NoiseGenerator::from_u64_seed(2, 1. / 32., 128., 3);
+//! let noise= [0.0;1024];
+//! noise_generator.fill(noise);
 //! ```
 //!
 //! # Crate Features

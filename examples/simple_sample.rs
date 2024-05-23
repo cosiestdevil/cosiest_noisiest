@@ -17,7 +17,7 @@ fn main() {
         let y = noise_generator.sample(x);
         result[x] = y
     }
-    for y in result {
-        println!("{}", y);
+    for (x,y) in result.into_iter().enumerate() {
+        println!("{}: {}",x, y);
     }
 }

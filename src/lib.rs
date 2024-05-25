@@ -4,17 +4,17 @@
 //! `cosiest_noisiest` allows generating 1d noise at arbitrary points
 //! # Examples
 //! ```
-//! use cosiest_noisiest::NoiseGenerator;
+//! use cosiest_noisiest::*;
 //!
-//! let mut noise_generator = NoiseGenerator::from_u64_seed(2, 1. / 32., 128., 3);
+//! let mut noise_generator = NoiseGenerator::from_u64_seed(2, (1./32.).into(), 128., 3);
 //! let noise:f64 = noise_generator.sample(1024);
 //! ```
 //! ```
-//! use cosiest_noisiest::NoiseGenerator;
+//! use cosiest_noisiest::*;
 //!
-//! let mut noise_generator = NoiseGenerator::from_u64_seed(2, 1. / 32., 128., 3);
-//! let noise= [0.0;1024];
-//! noise_generator.fill(noise);
+//! let mut noise_generator = NoiseGenerator::from_u64_seed(2, Frequency::from_wave_length(32), 128., 3);
+//! let mut noise= [0.0;1024];
+//! noise_generator.fill(0,&mut noise);
 //! ```
 //!
 //! # Crate Features
@@ -24,8 +24,8 @@
 use cfg_if::cfg_if;
 use num_integer::gcd;
 use rand::distributions::{Distribution, Standard};
-use rand::{Rng, SeedableRng};
-use rand_chacha::ChaCha20Rng;
+pub use rand::{Rng, SeedableRng};
+pub use rand_chacha::ChaCha20Rng;
 use splines::{Interpolate, Interpolation, Key, Spline};
 use std::mem::size_of;
 use std::ops::{AddAssign, Mul};
@@ -42,9 +42,9 @@ cfg_if! {
 ///
 /// # Examples
 /// ```
-/// use cosiest_noisiest::NoiseGenerator;
+/// use cosiest_noisiest::*;
 ///
-/// let mut noise_generator = NoiseGenerator::from_u64_seed(2, 1. / 32., 128., 3);
+/// let mut noise_generator = NoiseGenerator::from_u64_seed(2, (1./32.).into(), 128., 3);
 /// let noise:f64 = noise_generator.sample(123456789);
 /// ```
 ///
@@ -62,7 +62,7 @@ pub struct NoiseGenerator<
 {
     rng: ChaCha20Rng,
     /// The frequency of the noise used to calculate the wavelength of noise to generate.
-    pub frequency: f64,
+    pub wave_length: usize,
     /// The amount of words to offset the RNG source, determined from the size of the generation result
     offset_size: usize,
     /// The amplitude of the noise
@@ -75,6 +75,33 @@ pub struct NoiseGenerator<
     pub octaves: usize,
     current_spline: Option<Spline<Interpolator, T>>,
 }
+/// A wrapper struct to ease conversion between freqency and wave_length
+#[derive(Clone, Copy, Debug)]
+pub struct Frequency(f64);
+
+impl Frequency {
+    /// Convert the given wave_length to frequency
+    pub fn from_wave_length(wave_length: usize) -> Self {
+        Frequency(1. / wave_length as f64)
+    }
+    /// Convert this frequency to wave_length
+    pub fn to_wave_length(&self) -> usize {
+        (1. / **self) as usize
+    }
+}
+impl From<f64> for Frequency{
+    fn from(value: f64) -> Self {
+       Self(value)
+    }
+}
+impl std::ops::Deref for Frequency {
+    type Target = f64;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 impl<
         T: WordAligned
             + Default
@@ -89,21 +116,26 @@ where
     [T]: rand::Fill,
 {
     /// Constructs a NoiseGenerator with a new RNG source seeded with the seed
-    pub fn from_u64_seed(seed: u64, frequency: f64, amplitude: f64, octaves: usize) -> Self {
-        Self {
-            rng: ChaCha20Rng::seed_from_u64(seed),
+    pub fn from_u64_seed(seed: u64, frequency: Frequency, amplitude: f64, octaves: usize) -> Self {
+        Self::from_rng(
+            ChaCha20Rng::seed_from_u64(seed),
             frequency,
             amplitude,
             octaves,
-            offset_size: (size_of::<T>() * 8) / 32,
-            current_spline: None,
-        }
+        )
     }
     /// Constructs a NoiseGenerator from an existing RNG source
-    pub fn from_rng(rng: ChaCha20Rng, frequency: f64, amplitude: f64, octaves: usize) -> Self {
+    pub fn from_rng(
+        rng: ChaCha20Rng,
+        frequency: Frequency,
+        amplitude: f64,
+        octaves: usize,
+    ) -> Self {
+        let wave_length = frequency.to_wave_length();
+        let octaves = octaves.min(wave_length);
         Self {
             rng,
-            frequency,
+            wave_length,
             amplitude,
             octaves,
             offset_size: (size_of::<T>() * 8) / 32,
@@ -130,76 +162,78 @@ where
     /// For example if you want noise of length 256 with a frequency of 1/32 then `sample` will need to find the current
     /// wave_index (`x / wave_length`) and the next one and then interpolate the value at the wave_position (`x % wave_length`)
     /// for every call, so 256 times, that is 512 random numbers being generated.
-    /// However `fill` can see that there will only be `SIZE / wave_length + 1` (9 in this case) random numbers needed
+    /// However, `fill` can see that there will only be `SIZE / wave_length + 1` (9 in this case) random numbers needed
     /// and then reuse them when doing the interpolating step.
-    /// This means that there will be 64 times less calls to the RNG for the same result.
+    /// This means that there will be 64 times fewer calls to the RNG for the same result.
     pub fn fill<const SIZE: usize>(&mut self, start_offset: usize, dest: &mut [T; SIZE]) {
-        self.rng
-            .set_word_pos((start_offset * self.offset_size) as u128);
-        let wave_length = (1. / self.frequency) as usize;
-        let random_size = (SIZE / wave_length) + 1;
-        let mut octaves = self.octaves;
+        let wave_length = self.wave_length; //7
+        let size = SIZE.max(wave_length + 1); //10
+        let octaves = self.octaves; //2
         let amplitude = self.amplitude;
-        let mut divisor = 1;
-        if octaves > 1 {
-            divisor = gcd(wave_length, octaves);
-            if divisor == 1 {
-                divisor = 2;
-                octaves += 1;
-            }
-        }
+        let divisor = Self::divisor(wave_length, octaves); //2
         let mut random_numbers = Vec::<Vec<T>>::with_capacity(octaves);
+        let mut octave_wave_length = wave_length; //10,5
         for octave in 0..octaves {
-            let random_size = random_size * divisor.pow((octave+1) as u32);
+            let random_size = ((size as f64 / octave_wave_length as f64).ceil() as usize + 1)
+                * divisor.pow((octave) as u32); //3,6
             let mut octave_random_numbers = vec![T::default(); random_size];
             let mut rng = self.rng.clone();
+            let wave_start_offset = start_offset % octave_wave_length;
+            let start_wave_index = (start_offset - wave_start_offset) / octave_wave_length; //0,0
+
+            rng.set_word_pos((start_wave_index * self.offset_size) as u128);
             rng.set_stream(octave as u64);
             rng.fill(octave_random_numbers.as_mut_slice());
             random_numbers.push(octave_random_numbers);
+            octave_wave_length = (octave_wave_length / divisor).max(1);
         }
-
         for (x, result) in dest.iter_mut().enumerate().take(SIZE) {
-            let mut wave_length = wave_length;
-            let mut amplitude = amplitude;
-            for random_numbers in &random_numbers {
-                let wave_position = x % wave_length;
-                let wave_index = x / wave_length;
+            let mut octave_wave_length = wave_length;
+            let mut octave_amplitude = amplitude;
+            for octave_numbers in &random_numbers {
+                let wave_start_offset = start_offset % octave_wave_length;
+                let x = wave_start_offset + x;
+                let wave_position = x % octave_wave_length;
+                let wave_index = x / octave_wave_length;
                 let y: T = if wave_position == 0 {
-                    random_numbers[wave_index]
+                    octave_numbers[wave_index]
                 } else {
-                    let a = random_numbers[wave_index];
-                    let b = random_numbers[wave_index + 1];
+                    let a = octave_numbers[wave_index];
+                    let b = octave_numbers[wave_index + 1];
                     self.interpolate(
                         a,
                         b,
-                        (wave_position as Interpolator) / (wave_length as Interpolator),
+                        (wave_position as Interpolator) / (octave_wave_length as Interpolator),
                     )
                 };
-                *result += y * amplitude;
-                wave_length /= divisor;
-                amplitude /= 2.;
+                *result += y * octave_amplitude;
+                octave_wave_length = (octave_wave_length / divisor).max(1);
+                octave_amplitude /= divisor as f64;
+                //octave += 1;
+                if octave_amplitude == 0.0 {
+                    break;
+                }
             }
         }
     }
-
-    /// Samples the noise at the specific offset, this is an O(1) operation in respect to the offset
-    pub fn sample(&mut self, x: usize) -> T {
-        let mut wave_length = (1. / self.frequency) as usize;
-        let mut result = T::default();
-        let mut octaves = self.octaves;
-        let mut amplitude = self.amplitude;
-        let mut divisor = 1;
+    fn divisor(wave_length: usize, octaves: usize) -> usize {
+        let mut divisor = 2_usize;
         if octaves > 1 {
-            divisor = gcd(wave_length, octaves);
-            if divisor == 1 {
-                divisor = 2;
-                octaves += 1;
+            let temp = gcd(wave_length, octaves);
+            if temp != 1 {
+                divisor = wave_length / temp;
             }
         }
+        divisor
+    }
+    /// Samples the noise at the specific offset, this is an O(1) operation in respect to the offset
+    pub fn sample(&mut self, x: usize) -> T {
+        let mut wave_length = self.wave_length;
+        let mut result = T::default();
+        let octaves = self.octaves;
+        let mut amplitude = self.amplitude;
+        let divisor = Self::divisor(wave_length, octaves);
         for octave in 0..octaves {
-            if wave_length == 0 {
-                break;
-            }
             let wave_position = x % wave_length;
             let wave_index = x / wave_length;
             let y: T = if wave_position == 0 {
@@ -214,8 +248,11 @@ where
                 )
             };
             result += y * amplitude;
-            wave_length /= divisor;
-            amplitude /= 2.;
+            wave_length = (wave_length / divisor).max(1);
+            amplitude /= divisor as f64;
+            if wave_length == 0 || amplitude == 0.0 {
+                break;
+            }
         }
         result
     }

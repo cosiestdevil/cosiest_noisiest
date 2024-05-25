@@ -1,6 +1,4 @@
-use cosiest_noisiest::NoiseGenerator;
-use rand::SeedableRng;
-use rand_chacha::ChaCha20Rng;
+use cosiest_noisiest::*;
 
 fn main() {
     // Run registered benchmarks.
@@ -10,7 +8,7 @@ const SIZE: usize = 256;
 #[divan::bench(args = [true, false],sample_count=1000,sample_size=100,threads=8)]
 fn simple(fill: bool) -> [f64;SIZE] {
     let mut noise_generator =
-        NoiseGenerator::from_rng(ChaCha20Rng::seed_from_u64(2), 1. / 32., 128., 3);
+        NoiseGenerator::from_rng(ChaCha20Rng::seed_from_u64(2),  Frequency::from_wave_length(32), 128., 3);
     
     let mut result = [0.0; SIZE];
     if fill {

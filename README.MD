@@ -1,4 +1,5 @@
 [![Crates.io Version](https://img.shields.io/crates/v/cosiest_noisiest)](https://crates.io/crates/cosiest_noisiest)
+[![docs.rs](https://img.shields.io/docsrs/cosiest_noisiest)](https://docs.rs/cosiest_noisiest/latest/cosiest_noisiest/)
 [![DeepSource](https://app.deepsource.com/gh/cosiestdevil/cosiest_noisiest.svg/?label=active+issues&show_trend=true&token=OAOF2YZWASVVnyP4i6mdMFRy)](https://app.deepsource.com/gh/cosiestdevil/cosiest_noisiest/)
 
 # Cosiest Noisiest
